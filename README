@@ -1,0 +1,17 @@
+Usage:
+Copy the COCCAReg folder to YOUR_WHMCS_ROOT/modules/addons
+Copy the COCCAepp folder to YOUR_WHMCS_ROOT/modules/registrars
+
+Login to WHMCS as an administrator and go to Setup->Addon Modules
+
+Activate the COCCA Registrar Manager
+
+Go to Setup->Products/Services->Domain Registrars and activate the module COCCAepp.
+
+Click on configure... Select the SSL option and enter the certificate path. (The only necessary setting here
+
+Go to Addons and select COCCA Registrar Manager option
+
+Click on the Add new tab and enter the details about the registry. Add as many registry settings as required
+
+
