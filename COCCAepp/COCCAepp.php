@@ -285,45 +285,100 @@ function COCCAepp_GetRegistrarLock($params) {
 	# Grab variables
 	$sld = $params["sld"];
 	$tld = $params["tld"];
-// Not Implemented
+// what is the current domain status?
+# Grab list of current nameservers
+ try {
+ $client = _COCCAepp_Client($domain);
+        $request = $client->request($xml='<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+   <epp xmlns="urn:ietf:params:xml:ns:epp-1.0">
+     <command>
+       <info>
+         <domain:info
+          xmlns:domain="urn:ietf:params:xml:ns:domain-1.0">
+           <domain:name hosts="all">'.$domain.'</domain:name>
+         </domain:info>
+       </info>
+       <clTRID>'.mt_rand().mt_rand().'</clTRID>
+     </command>
+   </epp>
+');
+
+        # Parse XML result
+        $doc= new DOMDocument();
+        $doc->loadXML($request);
+        $statusarray = $doc->getElementsByTagName("status");
+				$currentstatus = array();
+				foreach ($statusarray as $nn) {
+					$currentstatus[] = $nn->getAttribute("s");
+				}
+			}
+			catch (Exception $e) {
+				$values["error"] = $e->getMessage();
+				return $values;
+			}
+			
 
 	# Get lock status
-	$lock = 0;
-	$lock=$params["lockenabled"];
-	if ($lock=="1") {
-		$lockstatus="locked";
-	} else {
-		$lockstatus="unlocked";
-	}
-	return $lockstatus;
-}
+	if (array_key_exists(array_search("clientDeleteProhibited", $currentstatus), $currentstatus) == 1 || array_key_exists(array_search("clientTransferProhibited", $currentstatus), $currentstatus) == 1 || array_key_exists(array_search("clientUpdateProhibited", $currentstatus), $currentstatus) == 1) {
+				$lockstatus = "locked";
+			}
+			else {
+				$lockstatus = "unlocked";
+			}
+			return $lockstatus;
+		}
 
 # NOT IMPLEMENTED
 function COCCAepp_SaveRegistrarLock($params) {
 	# Grab variables
 	$sld = $params["sld"];
 	$tld = $params["tld"];
-if (strcmp($params["lockenabled"], "locked") == 0) {
-	LockDomain($params);
-        $lockstatus = "1";
-    } else {
-		UnlockDomain($params);
-        $lockstatus = "0";
-    }
-	return $values;
+	$domain = "$sld.$tld";
+	//try {
+ 	//$client = _COCCAepp_Client($domain);
+ 	if ($params["lockenabled"] == "locked") {
+ 	COCCAepp_LockDomain($domain);
+ 	}else{
+ 	COCCAepp_UnlockDomain($domain);
+ 	}
+ 
+
 }
 
 function COCCAepp_LockDomain($params) {
-	# Grab variables
-	$sld = $params["sld"];
+$sld = $params["sld"];
 	$tld = $params["tld"];
-	$domain = "$sld.$tld";
+	$domain = "$sld.$tld";	
+	//$domain = "$sld.$tld";
 try {
 		if (!isset($client)) {
 			$client = _COCCAepp_Client($domain);
 		}
 
 		# Lock Domain
+		//First lock the less restrictive locks
+		$request = $client->request($xml = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<epp xmlns="urn:ietf:params:xml:ns:epp-1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <command>
+    <update>
+      <domain:update xmlns:domain="urn:ietf:params:xml:ns:domain-1.0" xsi:schemaLocation="urn:ietf:params:xml:ns:domain-1.0 domain-1.0.xsd">
+        <domain:name>'.$domain.'</domain:name>
+        <domain:add>
+          <domain:status s="clientDeleteProhibited"/>
+          <domain:status s="clientTransferProhibited"/>         
+        </domain:add>
+      </domain:update>
+    </update>
+    <clTRID>'.mt_rand().mt_rand().'</clTRID>
+  </command>
+</epp>
+');
+# Parse XML result		
+	$doc= new DOMDocument();
+	$doc->loadXML($request);
+    logModuleCall('COCCAepp', 'Lock-Delete-Transfer', $xml, $request);
+
+	//Prohibit any further updation
 		$request = $client->request($xml = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <epp xmlns="urn:ietf:params:xml:ns:epp-1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <command>
@@ -331,9 +386,7 @@ try {
       <domain:update xmlns:domain="urn:ietf:params:xml:ns:domain-1.0" xsi:schemaLocation="urn:ietf:params:xml:ns:domain-1.0 domain-1.0.xsd">
         <domain:name>'.$sld.'.'.$tld.'</domain:name>
         <domain:add>
-          <domain:status s="clientUpdateProhibited"/>
-          <domain:status s="clientDeleteProhibited"/>
-          <domain:status s="clientTransferProhibited"/>
+          <domain:status s="clientUpdateProhibited"/>          
         </domain:add>
       </domain:update>
     </update>
@@ -372,7 +425,7 @@ try {
 			$client = _COCCAepp_Client($domain);
 		}
 
-		# UnLock Domain
+		# Lift Update Prohibited Lock
 		$request = $client->request($xml = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <epp xmlns="urn:ietf:params:xml:ns:epp-1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <command>
@@ -380,7 +433,26 @@ try {
       <domain:update xmlns:domain="urn:ietf:params:xml:ns:domain-1.0" xsi:schemaLocation="urn:ietf:params:xml:ns:domain-1.0 domain-1.0.xsd">
         <domain:name>'.$sld.'.'.$tld.'</domain:name>
         <domain:rem>
-          <domain:status s="clientUpdateProhibited"/>
+          <domain:status s="clientUpdateProhibited"/>          
+        </domain:rem>
+      </domain:update>
+    </update>
+    <clTRID>'.mt_rand().mt_rand().'</clTRID>
+  </command>
+</epp>
+');
+# Parse XML result		
+	$doc= new DOMDocument();
+	$doc->loadXML($request);
+    logModuleCall('COCCAepp', 'Remove UpdateProhibited', $xml, $request);
+    
+$request = $client->request($xml = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<epp xmlns="urn:ietf:params:xml:ns:epp-1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <command>
+    <update>
+      <domain:update xmlns:domain="urn:ietf:params:xml:ns:domain-1.0" xsi:schemaLocation="urn:ietf:params:xml:ns:domain-1.0 domain-1.0.xsd">
+        <domain:name>'.$sld.'.'.$tld.'</domain:name>
+        <domain:rem>          
           <domain:status s="clientDeleteProhibited"/>
           <domain:status s="clientTransferProhibited"/>
         </domain:rem>
@@ -390,7 +462,6 @@ try {
   </command>
 </epp>
 ');
-
 	# Parse XML result		
 	$doc= new DOMDocument();
 	$doc->loadXML($request);
@@ -661,7 +732,7 @@ $domain = "$sld.$tld";
 				<domain:contact type="tech">'.$admHandle.'</domain:contact>
 				<domain:contact type="billing">'.$admHandle.'</domain:contact>
 				<domain:authInfo>
-					<domain:pw>COCCA'.rand().rand().'</domain:pw>
+					<domain:pw>CoCcA'.rand().rand().'</domain:pw>
 				</domain:authInfo>
 			</domain:create>
 		</create>
@@ -1879,6 +1950,11 @@ $domain = "$sld.$tld";
 	}
 
 	return $values;
+}
+
+function remove_locks($domain, $status) {
+
+		
 }
 
 function generateHandle() {
